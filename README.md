@@ -1,6 +1,7 @@
 -- MAJESTIC - ULTIMATE VERSION
 -- BLACK PANEL | PURE PURPLE STYLE (NO BLUE)
 -- ROUNDED BORDERS
+-- FIXED: Aimbot NÃO troca de alvo aleatoriamente
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -36,6 +37,11 @@ local isAiming = false
 local fovCircle = nil
 local fovGui = nil
 local mainGui = nil
+
+-- VARIÁVEIS PARA O AIMBOT FIXO (NÃO TROCA DE ALVO)
+local currentTarget = nil
+local targetLockTime = 0
+local LOCK_DURATION = 0.8 -- Segundos que mantém o mesmo alvo
 
 -- PURE PURPLE COLORS (NO BLUE/CYAN)
 local DARK_PURPLE = Color3.fromRGB(60, 0, 80)
@@ -81,14 +87,63 @@ local function IsSameTeam(player)
 end
 
 UserInputService.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton2 then isAiming = true end
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then 
+        isAiming = true 
+        -- Ao começar a mirar, reseta o alvo atual para buscar um novo
+        currentTarget = nil
+    end
 end)
 
 UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton2 then isAiming = false end
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then 
+        isAiming = false 
+        -- Solta o alvo quando para de mirar
+        currentTarget = nil
+    end
 end)
 
 function getBestTarget()
+    -- VERIFICA SE O ALVO ATUAL AINDA É VÁLIDO (NÃO TROCA ALEATORIAMENTE)
+    if currentTarget and tick() - targetLockTime < LOCK_DURATION then
+        local character = currentTarget.Character
+        local hum = character and character:FindFirstChild("Humanoid")
+        
+        if hum and hum.Health > 0 then
+            local part = character:FindFirstChild(settings.aimbotPart) or 
+                        character:FindFirstChild("HumanoidRootPart") or 
+                        character:FindFirstChild("Head")
+            
+            if part then
+                -- Verifica se ainda está no FOV e visível
+                local screenPos = Camera:WorldToScreenPoint(part.Position)
+                if screenPos then
+                    local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+                    local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                    
+                    if dist <= settings.aimbotFOV then
+                        if settings.visibleOnly and not IsTargetVisible(part) then
+                            -- Perdeu visibilidade, procura novo
+                            currentTarget = nil
+                        else
+                            -- MANTÉM O MESMO ALVO!
+                            return currentTarget
+                        end
+                    else
+                        -- Saiu do FOV, procura novo
+                        currentTarget = nil
+                    end
+                else
+                    currentTarget = nil
+                end
+            else
+                currentTarget = nil
+            end
+        else
+            currentTarget = nil
+        end
+    end
+    
+    -- SÓ PROCURA UM NOVO ALVO SE NÃO TIVER UM ATUAL VÁLIDO
     local best = nil
     local bestDist = settings.aimbotFOV + 1
     local mousePos = Vector2.new(Mouse.X, Mouse.Y)
@@ -104,7 +159,9 @@ function getBestTarget()
         local hum = character and character:FindFirstChild("Humanoid")
         if not hum or hum.Health <= 0 then continue end
         
-        local part = character:FindFirstChild(settings.aimbotPart) or character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Head")
+        local part = character:FindFirstChild(settings.aimbotPart) or 
+                    character:FindFirstChild("HumanoidRootPart") or 
+                    character:FindFirstChild("Head")
         if not part then continue end
         
         if settings.visibleOnly and not IsTargetVisible(part) then
@@ -120,6 +177,13 @@ function getBestTarget()
             end
         end
     end
+    
+    -- Atualiza o alvo atual com o novo encontrado
+    if best then
+        currentTarget = best
+        targetLockTime = tick()
+    end
+    
     return best
 end
 
@@ -128,7 +192,9 @@ function doAimbot()
     local target = getBestTarget()
     if not target or not target.Character then return end
     
-    local part = target.Character:FindFirstChild(settings.aimbotPart) or target.Character:FindFirstChild("HumanoidRootPart") or target.Character:FindFirstChild("Head")
+    local part = target.Character:FindFirstChild(settings.aimbotPart) or 
+                target.Character:FindFirstChild("HumanoidRootPart") or 
+                target.Character:FindFirstChild("Head")
     if not part then return end
     
     local screenPos = Camera:WorldToScreenPoint(part.Position)
@@ -1096,6 +1162,6 @@ end)
 print("========================================")
 print("MAJESTIC ULTIMATE LOADED!")
 print("Press HOME to open/close")
-print("Aimbot: FIXED to MOUSE")
+print("Aimbot: FIXED - NÃO TROCA DE ALVO!")
 print("FOV: PURPLE | Max: 600px")
 print("========================================")
